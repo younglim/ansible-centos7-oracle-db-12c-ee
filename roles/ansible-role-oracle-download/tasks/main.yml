@@ -1,0 +1,33 @@
+---
+
+  - name: Install dependencies (RHEL-based)
+    sudo: yes
+    yum: name={{ item }} state=present
+    with_items:
+       - nano
+       - iftop
+
+  - name: Ensure directory exists
+    sudo: yes
+    file: name={{ item }} state=directory
+    with_items:
+       - "{{ oracle_xe_files }}"
+
+  - name: Download Instantclient Installation files
+    get_url: url={{oracle_client_download_path}}{{ item }} dest={{ oracle_xe_files }}/{{ item}} force=no
+    with_items:
+      - "instantclient-basic-linux.x64-12.1.0.2.0.zip"
+      - "instantclient-sdk-linux.x64-12.1.0.2.0.zip"
+      - "instantclient-sqlplus-linux.x64-12.1.0.2.0.zip"
+
+  - name: Download Oracle 12c EE DB (RHEL-based)
+    get_url: url={{oracle_db_12c_download_path}}{{ item }} dest={{ oracle_xe_files }}/{{ item}} force=no
+    with_items:
+      - "linuxamd64_12102_database_1of2.zip"
+      - "linuxamd64_12102_database_2of2.zip"
+    when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+  - name: Install rsync (RHEL-based)
+    sudo: yes
+    yum: name=rsync state=present
+    when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'

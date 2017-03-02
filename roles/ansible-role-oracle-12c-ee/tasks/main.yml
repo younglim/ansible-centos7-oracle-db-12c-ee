@@ -1,0 +1,255 @@
+    - name: Add swap
+      sudo: yes
+      command: "{{item}}"
+      with_items:
+        - "dd if=/dev/zero of=/swapfile bs=1024 count=3072000"
+        - "chmod 600 /swapfile"
+        - "mkswap /swapfile"
+        - "swapon /swapfile"
+        - "echo '/swapfile swap swap defaults 0 0' >> /etc/fstab"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      ignore_errors: yes
+
+    - name: Fix error "setlocale LC_CTYPE cannot change locale (UTF-8)" for terminal
+      sudo: yes
+      lineinfile: dest="/etc/environment" line='{{ item }}' insertafter='EOF' regexp='{{ item}}' state=present
+      with_items:
+        - "LANG=en_US.utf-8"
+        - "LC_ALL=en_US.utf-8"
+
+    - name: ensure packages required are installed (RHEL-based)
+      sudo: yes
+      yum: pkg={{item}} state=latest
+      with_items:
+        - binutils 
+        - compat-libcap1
+        - gcc 
+        - gcc-c++
+        - glibc
+        - glibc-devel
+        - ksh
+        - compat-libstdc++-33
+        - libaio
+        - libaio-devel
+        - libgcc
+        - libstdc++
+        - libstdc++-devel 
+        - libXi
+        - libXtst
+        - make
+        - sysstat
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: unzip oracle 12c EE zip (1/2)
+      unarchive: 
+        src: "{{oracle_xe_files}}/linuxamd64_12102_database_1of2.zip"
+        dest: "{{oracle_xe_files}}" 
+        creates: "{{oracle_xe_files}}/database/runInstaller"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: unzip oracle 12c EE zip (2/2)
+      unarchive: 
+        src: "{{oracle_xe_files}}/linuxamd64_12102_database_2of2.zip"
+        dest: "{{oracle_xe_files}}" 
+        creates: "{{oracle_xe_files}}/database/stage/Components/oracle.ctx/12.1.0.2.0/1/DataFiles/filegroup3.jar"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add oinstall and dba groups
+      group:
+        name: "{{item}}"
+        state: present
+      with_items:
+        - "oinstall"
+        - "dba"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add oracle user
+      user:
+        name: oracle
+        shell: /bin/bash
+        group: oinstall
+        groups: dba
+        append: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add kernel parameters to the /etc/sysctl.conf
+      sudo: yes
+      lineinfile:
+        dest: /etc/sysctl.conf
+        state: present
+        line: "{{item}}"
+      with_items:
+        - "fs.aio-max-nr = 1048576"
+        - "fs.file-max = 6815744"
+        - "kernel.shmall = 2097152"
+        - "kernel.shmmni = 4096"
+        - "kernel.sem = 250 32000 100 128"
+        - "net.ipv4.ip_local_port_range = 9000 65500"
+        - "net.core.rmem_default = 262144"
+        - "net.core.rmem_max = 4194304"
+        - "net.core.wmem_default = 262144"
+        - "net.core.wmem_max = 1048586"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Sysctl changes
+      sudo: yes
+      command: "sysctl --system"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add limits to /etc/security/limits.conf
+      sudo: yes
+      lineinfile:
+        dest: /etc/security/limits.conf
+        state: present
+        line: "{{item}}"
+      with_items:
+        - "oracle soft nproc 2047"
+        - "oracle hard nproc 16384"
+        - "oracle soft nofile 1024"
+        - "oracle hard nofile 65536"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add ORACLE_HOME to oracle .bashrc
+      become: true
+      become_user: oracle
+      lineinfile:
+        dest: ~/.bashrc
+        state: present
+        line: export ORACLE_HOME=/opt/oracle/product/12.1.0.2/dbhome_1
+        regexp: "^export ORACLE_HOME.*"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Add ORACLE_SID=XE to oracle .bashrc
+      become: true
+      become_user: oracle
+      lineinfile:
+        dest: ~/.bashrc
+        state: present
+        line: export ORACLE_SID=XE
+        regexp: "^export ORACLE_SID.*"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Adding ORACLE_HOME to .bashrc
+      become: true
+      become_user: oracle
+      lineinfile: dest="~/.bashrc" line='export PATH=$PATH:$ORACLE_HOME/bin' insertafter='EOF' regexp='export PATH=\$PATH:\$ORACLE_HOME/bin' state=present
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Adding the path in the ORACLE_HOME/bin files
+      become: true
+      become_user: oracle
+      lineinfile:
+        dest: ~/.bashrc
+        state: present
+        line: "export PATH=$PATH:$ORACLE_HOME/bin"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Creates directories for Oracle DB
+      sudo: yes
+      file: path="{{item}}" state=directory owner=oracle group=oinstall mode=775
+      with_items:
+        - "/etc"
+        - "/opt"
+        - "/opt/oracle"
+        - "/opt/oraInventory"
+        - "/opt/datafile"
+        - "{{oracle_xe_files}}"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Ensure ~/ora-response dir exists
+      become: true
+      become_user: oracle
+      file: path=~/ora-response state=directory
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Copy oracle config response files
+      become: true
+      become_user: oracle
+      copy: src="ora-response/{{item}}" dest="~/ora-response/{{item}}"
+      with_items:
+        - "db_install.rsp"
+        - "dbca.rsp"
+        - "netca.rsp"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+
+    - name: Install Oracle DB 12c EE (1/2)
+      become: true
+      become_user: oracle
+      shell: ". ~/.bashrc && yes | {{oracle_xe_files}}/database/runInstaller -silent -showProgress -ignorePrereq -waitforcompletion -responseFile ~/ora-response/db_install.rsp" 
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      ignore_errors: true
+
+    - name: Install Oracle DB 12c EE (2/2)
+      sudo: true
+      shell: "{{item}}"
+      with_items:
+        - "/opt/oraInventory/orainstRoot.sh"
+        - "/opt/oracle/product/12.1.0.2/dbhome_1/root.sh"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      ignore_errors: true
+    
+    - name: Create database via dbca and Create listener via netca
+      become: true
+      become_user: oracle
+      shell: "{{item}}"
+      with_items:
+        - ". ~/.bashrc && dbca -silent -createDatabase -responseFile ~/ora-response/dbca.rsp"
+        - ". ~/.bashrc && netca -silent -responseFile ~/ora-response/netca.rsp"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      ignore_errors: true
+
+    - name: Configure oratab
+      become: true
+      become_user: oracle
+      shell: "sed '$s/N/Y/' /etc/oratab | tee /etc/oratab > /dev/null"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      ignore_errors: true
+
+    - name: Ensure oratab configured for ORACLE_SID=XE (1/2)
+      become: true
+      become_user: oracle
+      lineinfile:
+        dest: /etc/oratab
+        state: absent
+        line: "XE:/opt/oracle/product/12.1.0.2/dbhome_1:N"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Ensure oratab configured for ORACLE_SID=XE (2/2)
+      become: true
+      become_user: oracle
+      lineinfile:
+        dest: /etc/oratab
+        state: present
+        line: "XE:/opt/oracle/product/12.1.0.2/dbhome_1:Y"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+    - name: Startup DB if not started
+      become: true
+      become_user: oracle
+      shell: ". ~/.bashrc && echo 'startup' | sqlplus -s / as sysdba"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+   
+    - name: Copy register_listener.sql
+      copy: src=scripts/register_listener.sql dest=/tmp/register_listener.sql
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Register listener
+      become: true
+      become_user: oracle
+      shell: ". ~/.bashrc && sqlplus / as sysdba @/tmp/register_listener.sql"
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Copy dbora
+      sudo: yes
+      copy: src=scripts/dbora dest=/etc/init.d/dbora mode=750
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Enable sysv dbora service
+      service: name=dbora enabled=yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+      
+    - name: Start dbora
+      service: name=dbora state=started
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+

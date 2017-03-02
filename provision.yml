@@ -1,0 +1,25 @@
+---
+
+- hosts: all
+
+  vars:
+    ansible_files: "{{ project_dir }}/provisioning"
+    # oracle_db_12c_download_path: ""
+    # oracle_client_download_path: ""
+    oracle_xe_files: "{{ project_dir }}/provisioning/downloads"
+    oracle_client_files: "{{ project_dir }}/provisioning/downloads"
+
+  pre_tasks:
+    - debug: msg="Welcome to the Oracle 12c EE environment installer..."
+
+  environment:
+    LD_LIBRARY_PATH: /opt/install/oracle/instantclient_12_1
+    ORACLE_HOME: /u01/app/oracle/product/11.2.0/xe
+
+  roles:
+   # - { role: ansible-role-oracle-download , sudo: yes}
+   - { role: ansible-role-oracle-client , sudo: yes}
+   - { role: ansible-role-oracle-12c-ee, sudo: yes}
+
+  tasks:
+    - debug: msg="Environment is ready."

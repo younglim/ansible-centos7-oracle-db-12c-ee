@@ -1,0 +1,67 @@
+---
+- name: ensure packages required are installed (Fedora-based)
+  yum: pkg=unzip state=latest
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+- name: ensure packages required are installed (Ubuntu-based)
+  apt: pkg=unzip state=latest
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      
+- name: create oracle directory in destination server
+  file: path="/opt/install/oracle" state=directory mode=0755
+
+- name: Extract instantclient-basic archive
+  unarchive: src={{oracle_client_files}}/instantclient-basic-linux.x64-12.1.0.2.0.zip
+             dest=/opt/install/oracle
+             copy=yes
+
+- name: Extract instantclient-sdk archive
+  unarchive: src={{oracle_client_files}}/instantclient-sdk-linux.x64-12.1.0.2.0.zip
+             dest=/opt/install/oracle
+             copy=yes
+
+- name: Extract instantclient-sqlplus archive
+  unarchive: src={{oracle_client_files}}/instantclient-sqlplus-linux.x64-12.1.0.2.0.zip
+             dest=/opt/install/oracle
+             copy=yes
+
+- name: add ORACLE_HOME to {{ user_home }} .bash_profile
+  become: true
+  become_user: "{{ user_home }}"
+  lineinfile:
+    dest: ~/.bash_profile
+    state: present
+    line: export ORACLE_HOME=/opt/install/oracle/instantclient_12_1
+    regexp: "^export ORACLE_HOME.*"
+
+- name: Adding the path in the ORACLE_HOME files
+  become: true
+  become_user: "{{ user_home }}"
+  lineinfile:
+    dest: ~/.bash_profile
+    state: present
+    line: "export PATH=$PATH:$ORACLE_HOME"
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+- name: add LD_LIBRARY_PATH to {{ user_home }} .bash_profile
+  become: true
+  become_user: "{{ user_home }}"
+  lineinfile:
+    dest: ~/.bash_profile
+    state: present
+    line: export LD_LIBRARY_PATH=/opt/install/oracle/instantclient_12_1
+    regexp: "^export LD_LIBRARY_PATH.*"
+
+- name: create symbolic link to libclntsh.so
+  file: 
+    src: /opt/install/oracle/instantclient_12_1/libclntsh.so.12.1
+    dest: /opt/install/oracle/instantclient_12_1/libclntsh.so
+    state: link
+
+- name: install libaio (RHEL-based)
+  yum: name=libaio state=present
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'Fedora'
+
+- name: install libaio (Ubuntu-based)
+  apt: name=libaio1 state=present
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
